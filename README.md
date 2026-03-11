@@ -53,7 +53,7 @@ dotnet run
 The application will automatically apply migrations and seed initial data on startup.
 
 
-### Default Admin Credentials
+###3. Default Admin Credentials
 
 - **Username**: admin
 - **Password**: admin123
@@ -96,4 +96,5 @@ The application seeds the following sample products:
 ## License
 
 MIT License
+
 
