@@ -52,10 +52,6 @@ dotnet run
 
 The application will automatically apply migrations and seed initial data on startup.
 
-### 3. Access the Application
-
-- **Store**: https://localhost:5001 (or the port shown in terminal)
-- **Admin Login**: https://localhost:5001/admin/login
 
 ### Default Admin Credentials
 
@@ -100,3 +96,4 @@ The application seeds the following sample products:
 ## License
 
 MIT License
+
