@@ -1,0 +1,301 @@
+@page "/admin/dashboard"
+@page "/admin/products"
+@using ECommerceStore.Models
+@using ECommerceStore.Services
+@inject ProductService ProductService
+@inject AdminStateService AdminState
+@inject NavigationManager Navigation
+@implements IDisposable
+@rendermode InteractiveServer
+
+<PageTitle>Manage Products - ECommerce Store</PageTitle>
+
+@if (!AdminState.IsAuthenticated)
+{
+    <div class="auth-required">
+        <p>Please <a href="/admin/login">login</a> to access the admin dashboard.</p>
+    </div>
+}
+else
+{
+    <div class="admin-dashboard">
+        <div class="dashboard-header">
+            <h1>Manage Products</h1>
+            <div class="header-actions">
+                <span class="welcome-text">Welcome, @AdminState.CurrentAdmin?.Username</span>
+                <button class="btn btn-outline" @onclick="HandleLogout">Logout</button>
+            </div>
+        </div>
+
+        <div class="dashboard-actions">
+            <button class="btn btn-primary" @onclick="ShowAddModal">+ Add New Product</button>
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="loading">Loading products...</div>
+        }
+        else if (products.Count == 0)
+        {
+            <div class="empty-state">
+                <p>No products found. Add your first product to get started.</p>
+            </div>
+        }
+        else
+        {
+            <div class="products-table-container">
+                <table class="products-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Image</th>
+                            <th>Name</th>
+                            <th>Price</th>
+                            <th>Stock</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var product in products)
+                        {
+                            <tr>
+                                <td>@product.Id</td>
+                                <td>
+                                    <img src="@product.ImageUrl" alt="@product.Name" class="product-thumbnail" />
+                                </td>
+                                <td>@product.Name</td>
+                                <td>$@product.Price.ToString("F2")</td>
+                                <td>@product.StockQuantity</td>
+                                <td class="actions-cell">
+                                    <button class="btn btn-sm btn-secondary" @onclick="() => ShowEditModal(product)">Edit</button>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => ShowDeleteConfirm(product)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    @if (showModal)
+    {
+        <div class="modal-overlay" @onclick="CloseModal">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <h2>@(isEditing ? "Edit Product" : "Add New Product")</h2>
+                
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger">@errorMessage</div>
+                }
+
+                <EditForm Model="@currentProduct" OnValidSubmit="HandleSaveProduct" FormName="productForm">
+                    <DataAnnotationsValidator />
+                    
+                    <div class="form-group">
+                        <label>Product Name</label>
+                        <InputText @bind-Value="currentProduct.Name" class="form-control" placeholder="Enter product name" />
+                        <ValidationMessage For="@(() => currentProduct.Name)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Description</label>
+                        <InputTextArea @bind-Value="currentProduct.Description" class="form-control" rows="3" placeholder="Enter description" />
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Price ($)</label>
+                            <InputNumber @bind-Value="currentProduct.Price" class="form-control" placeholder="0.00" />
+                            <ValidationMessage For="@(() => currentProduct.Price)" />
+                        </div>
+
+                        <div class="form-group">
+                            <label>Stock Quantity</label>
+                            <InputNumber @bind-Value="currentProduct.StockQuantity" class="form-control" placeholder="0" />
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Category</label>
+                        <InputText @bind-Value="currentProduct.Category" class="form-control" placeholder="Enter category" />
+                        <ValidationMessage For="@(() => currentProduct.Category)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Image URL</label>
+                        <InputText @bind-Value="currentProduct.ImageUrl" class="form-control" placeholder="https://example.com/image.jpg" />
+                    </div>
+
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                            @(isSaving ? "Saving..." : "Save Product")
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    }
+
+    @if (showDeleteConfirm)
+    {
+        <div class="modal-overlay" @onclick="CloseDeleteConfirm">
+            <div class="modal-content modal-sm" @onclick:stopPropagation="true">
+                <h2>Delete Product</h2>
+                <p>Are you sure you want to delete "<strong>@productToDelete?.Name</strong>"?</p>
+                <p class="warning-text">This action cannot be undone.</p>
+                
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" @onclick="CloseDeleteConfirm">Cancel</button>
+                    <button class="btn btn-danger" @onclick="HandleDelete" disabled="@isDeleting">
+                        @(isDeleting ? "Deleting..." : "Delete")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private List<Product> products = new();
+    private Product currentProduct = new();
+    private Product? productToDelete;
+    private bool isLoading = true;
+    private bool showModal;
+    private bool showDeleteConfirm;
+    private bool isEditing;
+    private bool isSaving;
+    private bool isDeleting;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        AdminState.OnChange += StateHasChanged;
+        
+        // Give a moment for state to propagate if coming from login
+        await Task.Delay(150);
+        
+        // Check authentication state
+        if (!AdminState.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/admin/login");
+            return;
+        }
+        
+        await LoadProducts();
+    }
+
+    public void Dispose()
+    {
+        AdminState.OnChange -= StateHasChanged;
+    }
+
+    private async Task LoadProducts()
+    {
+        isLoading = true;
+        try
+        {
+            products = await ProductService.GetAllProductsAsync();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ShowAddModal()
+    {
+        currentProduct = new Product();
+        isEditing = false;
+        errorMessage = null;
+        showModal = true;
+    }
+
+    private void ShowEditModal(Product product)
+    {
+        currentProduct = new Product
+        {
+            Id = product.Id,
+            Name = product.Name,
+            Description = product.Description,
+            Price = product.Price,
+            ImageUrl = product.ImageUrl,
+            Category = product.Category,
+            StockQuantity = product.StockQuantity
+        };
+        isEditing = true;
+        errorMessage = null;
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        currentProduct = new Product();
+    }
+
+    private void ShowDeleteConfirm(Product product)
+    {
+        productToDelete = product;
+        showDeleteConfirm = true;
+    }
+
+    private void CloseDeleteConfirm()
+    {
+        showDeleteConfirm = false;
+        productToDelete = null;
+    }
+
+    private async Task HandleSaveProduct()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        try
+        {
+            if (isEditing)
+            {
+                await ProductService.UpdateProductAsync(currentProduct);
+            }
+            else
+            {
+                await ProductService.CreateProductAsync(currentProduct);
+            }
+
+            await LoadProducts();
+            CloseModal();
+        }
+        catch (Exception)
+        {
+            errorMessage = "Failed to save product. Please try again.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task HandleDelete()
+    {
+        if (productToDelete == null) return;
+
+        isDeleting = true;
+        try
+        {
+            await ProductService.DeleteProductAsync(productToDelete.Id);
+            await LoadProducts();
+            CloseDeleteConfirm();
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+
+    private void HandleLogout()
+    {
+        AdminState.Logout();
+        Navigation.NavigateTo("/admin/login");
+    }
+}

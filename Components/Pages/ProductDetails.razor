@@ -1,0 +1,155 @@
+@page "/product/{Id:int}"
+@using ECommerceStore.Models
+@using ECommerceStore.Services
+@inject ProductService ProductService
+@inject CartService CartService
+@inject CartStateService CartState
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>@(product?.Name ?? "Product Details") - ECommerce Store</PageTitle>
+
+<div class="product-details-container">
+    @if (isLoading)
+    {
+        <div class="loading">Loading product details...</div>
+    }
+    else if (product == null)
+    {
+        <div class="not-found">
+            <h2>Product Not Found</h2>
+            <p>The product you're looking for doesn't exist or has been removed.</p>
+            <a href="/" class="btn btn-primary">Back to Store</a>
+        </div>
+    }
+    else
+    {
+        <div class="breadcrumb">
+            <a href="/">Home</a> / <a href="/?category=@product.Category">@product.Category</a> / <span>@product.Name</span>
+        </div>
+
+        <div class="product-details">
+            <div class="product-image-section">
+                <img src="@product.ImageUrl" alt="@product.Name" class="product-main-image" />
+            </div>
+
+            <div class="product-info-section">
+                <span class="product-category">@product.Category</span>
+                <h1 class="product-title">@product.Name</h1>
+                
+                <div class="product-price">$@product.Price.ToString("F2")</div>
+
+                <div class="stock-status @(product.StockQuantity > 0 ? "in-stock" : "out-of-stock")">
+                    @if (product.StockQuantity > 0)
+                    {
+                        <span>✓ In Stock (@product.StockQuantity available)</span>
+                    }
+                    else
+                    {
+                        <span>✗ Out of Stock</span>
+                    }
+                </div>
+
+                <div class="product-description">
+                    <h3>Description</h3>
+                    <p>@product.Description</p>
+                </div>
+
+                <div class="quantity-selector">
+                    <label>Quantity:</label>
+                    <div class="quantity-controls">
+                        <button @onclick="DecreaseQuantity" disabled="@(quantity <= 1)">−</button>
+                        <span class="quantity-value">@quantity</span>
+                        <button @onclick="IncreaseQuantity" disabled="@(quantity >= product.StockQuantity)">+</button>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn btn-add-cart" @onclick="AddToCart" disabled="@(product.StockQuantity == 0)">
+                        @if (product.StockQuantity == 0)
+                        {
+                            <span>Out of Stock</span>
+                        }
+                        else
+                        {
+                            <span>Add to Cart</span>
+                        }
+                    </button>
+                    <a href="/cart" class="btn btn-view-cart">View Cart</a>
+                </div>
+
+                @if (showAddedNotification)
+                {
+                    <div class="added-notification">
+                        ✓ Added @quantity item(s) to cart!
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Product? product;
+    private bool isLoading = true;
+    private int quantity = 1;
+    private bool showAddedNotification;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProduct();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadProduct();
+    }
+
+    private async Task LoadProduct()
+    {
+        isLoading = true;
+        try
+        {
+            product = await ProductService.GetProductByIdAsync(Id);
+            quantity = 1;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void IncreaseQuantity()
+    {
+        if (product != null && quantity < product.StockQuantity)
+        {
+            quantity++;
+        }
+    }
+
+    private void DecreaseQuantity()
+    {
+        if (quantity > 1)
+        {
+            quantity--;
+        }
+    }
+
+    private async Task AddToCart()
+    {
+        if (product == null || product.StockQuantity == 0) return;
+
+        await CartService.AddToCartAsync(CartState.SessionId, product.Id, quantity);
+        CartState.IncrementItemCount(quantity);
+
+        showAddedNotification = true;
+        StateHasChanged();
+
+        await Task.Delay(3000);
+        showAddedNotification = false;
+        StateHasChanged();
+    }
+}

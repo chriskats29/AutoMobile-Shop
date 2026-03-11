@@ -1,0 +1,127 @@
+@page "/cart"
+@using ECommerceStore.Models
+@using ECommerceStore.Services
+@inject CartService CartService
+@inject CartStateService CartState
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Shopping Cart - ECommerce Store</PageTitle>
+
+<div class="cart-container">
+    <h1>Shopping Cart</h1>
+
+    @if (isLoading)
+    {
+        <div class="loading">Loading your cart...</div>
+    }
+    else if (cartItems.Count == 0)
+    {
+        <div class="empty-cart">
+            <div class="empty-cart-icon">🛒</div>
+            <h2>Your cart is empty</h2>
+            <p>Looks like you haven't added any items to your cart yet.</p>
+            <a href="/" class="btn btn-primary">Continue Shopping</a>
+        </div>
+    }
+    else
+    {
+        <div class="cart-content">
+            <div class="cart-items">
+                @foreach (var item in cartItems)
+                {
+                    <div class="cart-item">
+                        <div class="item-image">
+                            <img src="@item.Product.ImageUrl" alt="@item.Product.Name" />
+                        </div>
+                        <div class="item-details">
+                            <h3 class="item-name">
+                                <a href="/product/@item.ProductId">@item.Product.Name</a>
+                            </h3>
+                            <span class="item-category">@item.Product.Category</span>
+                            <span class="item-price">$@item.Product.Price.ToString("F2")</span>
+                        </div>
+                        <div class="item-quantity">
+                            <button @onclick="() => UpdateQuantity(item, item.Quantity - 1)" disabled="@(item.Quantity <= 1)">−</button>
+                            <span>@item.Quantity</span>
+                            <button @onclick="() => UpdateQuantity(item, item.Quantity + 1)" disabled="@(item.Quantity >= item.Product.StockQuantity)">+</button>
+                        </div>
+                        <div class="item-total">
+                            $@((item.Product.Price * item.Quantity).ToString("F2"))
+                        </div>
+                        <button class="remove-btn" @onclick="() => RemoveItem(item)">×</button>
+                    </div>
+                }
+            </div>
+
+            <div class="cart-summary">
+                <h2>Order Summary</h2>
+                <div class="summary-row">
+                    <span>Subtotal (@cartItems.Sum(i => i.Quantity) items)</span>
+                    <span>$@cartTotal.ToString("F2")</span>
+                </div>
+                <div class="summary-row">
+                    <span>Shipping</span>
+                    <span class="free-shipping">FREE</span>
+                </div>
+                <div class="summary-divider"></div>
+                <div class="summary-row total">
+                    <span>Total</span>
+                    <span>$@cartTotal.ToString("F2")</span>
+                </div>
+                <a href="/checkout" class="btn btn-checkout">Proceed to Checkout</a>
+                <a href="/" class="continue-shopping">← Continue Shopping</a>
+            </div>
+        </div>
+
+        <div class="cart-actions">
+            <button class="btn btn-clear" @onclick="ClearCart">Clear Cart</button>
+        </div>
+    }
+</div>
+
+@code {
+    private List<CartItem> cartItems = new();
+    private decimal cartTotal;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCart();
+    }
+
+    private async Task LoadCart()
+    {
+        isLoading = true;
+        try
+        {
+            cartItems = await CartService.GetCartItemsAsync(CartState.SessionId);
+            cartTotal = await CartService.GetCartTotalAsync(CartState.SessionId);
+            CartState.UpdateItemCount(cartItems.Sum(i => i.Quantity));
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task UpdateQuantity(CartItem item, int newQuantity)
+    {
+        if (newQuantity < 1) return;
+
+        await CartService.UpdateQuantityAsync(CartState.SessionId, item.Id, newQuantity);
+        await LoadCart();
+    }
+
+    private async Task RemoveItem(CartItem item)
+    {
+        await CartService.RemoveFromCartAsync(CartState.SessionId, item.Id);
+        await LoadCart();
+    }
+
+    private async Task ClearCart()
+    {
+        await CartService.ClearCartAsync(CartState.SessionId);
+        await LoadCart();
+    }
+}

@@ -1,0 +1,290 @@
+@page "/checkout"
+@using ECommerceStore.Models
+@using ECommerceStore.Services
+@inject CartService CartService
+@inject CartStateService CartState
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Checkout - ECommerce Store</PageTitle>
+
+<div class="checkout-container">
+    <h1>Checkout</h1>
+
+    @if (isLoading)
+    {
+        <div class="loading">Loading checkout...</div>
+    }
+    else if (cartItems.Count == 0)
+    {
+        <div class="empty-cart">
+            <div class="empty-cart-icon">🛒</div>
+            <h2>Your cart is empty</h2>
+            <p>Add some items to your cart before checkout.</p>
+            <a href="/" class="btn btn-primary">Continue Shopping</a>
+        </div>
+    }
+    else
+    {
+        <div class="checkout-content">
+            <div class="checkout-form-section">
+                <h2>Shipping Information</h2>
+                <EditForm Model="@checkoutModel" OnValidSubmit="HandleCheckout" FormName="checkoutForm">
+                    <DataAnnotationsValidator />
+                    
+                    <div class="form-section">
+                        <h3>Contact Information</h3>
+                        <div class="form-group">
+                            <label>Full Name *</label>
+                            <InputText @bind-Value="checkoutModel.FullName" class="form-control" placeholder="John Doe" />
+                            <ValidationMessage For="@(() => checkoutModel.FullName)" />
+                        </div>
+
+                        <div class="form-group">
+                            <label>Email Address *</label>
+                            <InputText @bind-Value="checkoutModel.Email" type="email" class="form-control" placeholder="john@example.com" />
+                            <ValidationMessage For="@(() => checkoutModel.Email)" />
+                        </div>
+
+                        <div class="form-group">
+                            <label>Phone Number *</label>
+                            <InputText @bind-Value="checkoutModel.Phone" class="form-control" placeholder="(555) 123-4567" />
+                            <ValidationMessage For="@(() => checkoutModel.Phone)" />
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3>Shipping Address</h3>
+                        <div class="form-group">
+                            <label>Street Address *</label>
+                            <InputText @bind-Value="checkoutModel.Address" class="form-control" placeholder="123 Main Street" />
+                            <ValidationMessage For="@(() => checkoutModel.Address)" />
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>City *</label>
+                                <InputText @bind-Value="checkoutModel.City" class="form-control" placeholder="New York" />
+                                <ValidationMessage For="@(() => checkoutModel.City)" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>State/Province *</label>
+                                <InputText @bind-Value="checkoutModel.State" class="form-control" placeholder="NY" />
+                                <ValidationMessage For="@(() => checkoutModel.State)" />
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>ZIP/Postal Code *</label>
+                                <InputText @bind-Value="checkoutModel.ZipCode" class="form-control" placeholder="10001" />
+                                <ValidationMessage For="@(() => checkoutModel.ZipCode)" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Country *</label>
+                                <InputText @bind-Value="checkoutModel.Country" class="form-control" placeholder="United States" />
+                                <ValidationMessage For="@(() => checkoutModel.Country)" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3>Payment Information</h3>
+                        <div class="form-group">
+                            <label>Card Number *</label>
+                            <InputText @bind-Value="checkoutModel.CardNumber" class="form-control" placeholder="1234 5678 9012 3456" maxlength="19" />
+                            <ValidationMessage For="@(() => checkoutModel.CardNumber)" />
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Expiry Date *</label>
+                                <InputText @bind-Value="checkoutModel.ExpiryDate" class="form-control" placeholder="MM/YY" maxlength="5" />
+                                <ValidationMessage For="@(() => checkoutModel.ExpiryDate)" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>CVV *</label>
+                                <InputText @bind-Value="checkoutModel.CVV" class="form-control" placeholder="123" maxlength="4" type="password" />
+                                <ValidationMessage For="@(() => checkoutModel.CVV)" />
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger">@errorMessage</div>
+                    }
+
+                    @if (showSuccess)
+                    {
+                        <div class="alert alert-success">
+                            <h3>Order Placed Successfully! 🎉</h3>
+                            <p>Thank you for your order. Your order number is: <strong>@orderNumber</strong></p>
+                            <p>You will receive a confirmation email shortly.</p>
+                        </div>
+                    }
+
+                    <div class="checkout-actions">
+                        <a href="/cart" class="btn btn-secondary">← Back to Cart</a>
+                        <button type="submit" class="btn btn-primary" disabled="@(isProcessing || showSuccess)">
+                            @if (isProcessing)
+                            {
+                                <span>Processing...</span>
+                            }
+                            else if (showSuccess)
+                            {
+                                <span>Order Complete</span>
+                            }
+                            else
+                            {
+                                <span>Place Order</span>
+                            }
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+
+            <div class="checkout-summary">
+                <h2>Order Summary</h2>
+                <div class="order-items">
+                    @foreach (var item in cartItems)
+                    {
+                        <div class="order-item">
+                            <img src="@item.Product.ImageUrl" alt="@item.Product.Name" class="order-item-image" />
+                            <div class="order-item-details">
+                                <h4>@item.Product.Name</h4>
+                                <p>Quantity: @item.Quantity</p>
+                                <p class="order-item-price">$@((item.Product.Price * item.Quantity).ToString("F2"))</p>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="summary-divider"></div>
+                <div class="summary-row">
+                    <span>Subtotal (@cartItems.Sum(i => i.Quantity) items)</span>
+                    <span>$@cartTotal.ToString("F2")</span>
+                </div>
+                <div class="summary-row">
+                    <span>Shipping</span>
+                    <span class="free-shipping">FREE</span>
+                </div>
+                <div class="summary-row">
+                    <span>Tax (estimated)</span>
+                    <span>$@taxAmount.ToString("F2")</span>
+                </div>
+                <div class="summary-divider"></div>
+                <div class="summary-row total">
+                    <span>Total</span>
+                    <span>$@totalAmount.ToString("F2")</span>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<CartItem> cartItems = new();
+    private decimal cartTotal;
+    private decimal taxAmount;
+    private decimal totalAmount;
+    private bool isLoading = true;
+    private bool isProcessing = false;
+    private bool showSuccess = false;
+    private string? errorMessage;
+    private string orderNumber = string.Empty;
+    private CheckoutModel checkoutModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCart();
+    }
+
+    private async Task LoadCart()
+    {
+        isLoading = true;
+        try
+        {
+            cartItems = await CartService.GetCartItemsAsync(CartState.SessionId);
+            cartTotal = await CartService.GetCartTotalAsync(CartState.SessionId);
+            taxAmount = cartTotal * 0.08m; // 8% tax
+            totalAmount = cartTotal + taxAmount;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleCheckout()
+    {
+        isProcessing = true;
+        errorMessage = null;
+
+        try
+        {
+            // Generate order number
+            orderNumber = $"ORD-{DateTime.Now:yyyyMMdd}-{Guid.NewGuid().ToString().Substring(0, 8).ToUpper()}";
+            
+            // Simulate order processing
+            await Task.Delay(1500);
+            
+            // Clear cart after successful order
+            await CartService.ClearCartAsync(CartState.SessionId);
+            CartState.UpdateItemCount(0);
+            
+            showSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private class CheckoutModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Full name is required")]
+        public string FullName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Email is required")]
+        [System.ComponentModel.DataAnnotations.EmailAddress(ErrorMessage = "Invalid email address")]
+        public string Email { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Phone number is required")]
+        public string Phone { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Address is required")]
+        public string Address { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "City is required")]
+        public string City { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "State is required")]
+        public string State { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "ZIP code is required")]
+        public string ZipCode { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Country is required")]
+        public string Country { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Card number is required")]
+        [System.ComponentModel.DataAnnotations.StringLength(19, MinimumLength = 13, ErrorMessage = "Invalid card number")]
+        public string CardNumber { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Expiry date is required")]
+        public string ExpiryDate { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "CVV is required")]
+        [System.ComponentModel.DataAnnotations.StringLength(4, MinimumLength = 3, ErrorMessage = "Invalid CVV")]
+        public string CVV { get; set; } = string.Empty;
+    }
+}
+

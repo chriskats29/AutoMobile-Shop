@@ -1,0 +1,168 @@
+@page "/"
+@using ECommerceStore.Models
+@using ECommerceStore.Services
+@inject ProductService ProductService
+@inject CartService CartService
+@inject CartStateService CartState
+@rendermode InteractiveServer
+
+<PageTitle>AutoMotive Shop - Home</PageTitle>
+
+<div class="home-container">
+    <div class="hero-section">
+        <h1>Welcome to AutoMotive Shop</h1>
+        <p>Discover quality automotive products for your vehicle</p>
+    </div>
+
+    <div class="filters-section">
+        <div class="search-box">
+            <input type="text" @bind="searchTerm" @bind:event="oninput" placeholder="Search products..." class="search-input" />
+            <button class="btn btn-search" @onclick="SearchProducts">Search</button>
+            @if (!string.IsNullOrEmpty(searchTerm))
+            {
+                <button class="btn btn-clear-search" @onclick="ClearSearch">Clear</button>
+            }
+        </div>
+
+        <div class="category-filter">
+            <select @bind="selectedCategory" @bind:after="ApplyFilters" class="category-select">
+                <option value="">All Categories</option>
+                @foreach (var category in categories)
+                {
+                    <option value="@category">@category</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading">Loading products...</div>
+    }
+    else if (filteredProducts.Count == 0)
+    {
+        <div class="no-products">
+            <p>No products found.</p>
+            @if (!string.IsNullOrEmpty(searchTerm) || !string.IsNullOrEmpty(selectedCategory))
+            {
+                <button class="btn btn-secondary" @onclick="ClearFilters">Clear Filters</button>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="products-grid">
+            @foreach (var product in filteredProducts)
+            {
+                <div class="product-card">
+                    <a href="/product/@product.Id" class="product-link">
+                        <div class="product-image">
+                            <img src="@product.ImageUrl" alt="@product.Name" />
+                        </div>
+                        <div class="product-info">
+                            <span class="product-category">@product.Category</span>
+                            <h3 class="product-name">@product.Name</h3>
+                            <p class="product-description">@TruncateDescription(product.Description)</p>
+                            <div class="product-footer">
+                                <span class="product-price">$@product.Price.ToString("F2")</span>
+                                <span class="stock-badge @(product.StockQuantity > 0 ? "in-stock" : "out-of-stock")">
+                                    @(product.StockQuantity > 0 ? "In Stock" : "Out of Stock")
+                                </span>
+                            </div>
+                        </div>
+                    </a>
+                    <button class="btn btn-add-to-cart" @onclick="() => AddToCart(product)" 
+                            @onclick:stopPropagation="true" disabled="@(product.StockQuantity == 0)">
+                        @(product.StockQuantity > 0 ? "Add to Cart" : "Out of Stock")
+                    </button>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<Product> products = new();
+    private List<Product> filteredProducts = new();
+    private List<string> categories = new();
+    private string searchTerm = string.Empty;
+    private string selectedCategory = string.Empty;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProducts();
+        await LoadCategories();
+    }
+
+    private async Task LoadProducts()
+    {
+        isLoading = true;
+        try
+        {
+            products = await ProductService.GetAllProductsAsync();
+            ApplyFilters();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadCategories()
+    {
+        categories = await ProductService.GetCategoriesAsync();
+    }
+
+    private void ApplyFilters()
+    {
+        filteredProducts = products;
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            filteredProducts = filteredProducts
+                .Where(p => p.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                           p.Description.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedCategory))
+        {
+            filteredProducts = filteredProducts
+                .Where(p => p.Category == selectedCategory)
+                .ToList();
+        }
+    }
+
+    private void SearchProducts()
+    {
+        ApplyFilters();
+    }
+
+    private void ClearSearch()
+    {
+        searchTerm = string.Empty;
+        ApplyFilters();
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        selectedCategory = string.Empty;
+        ApplyFilters();
+    }
+
+    private async Task AddToCart(Product product)
+    {
+        if (product.StockQuantity == 0) return;
+        
+        await CartService.AddToCartAsync(CartState.SessionId, product.Id, 1);
+        CartState.IncrementItemCount(1);
+    }
+
+    private string TruncateDescription(string description)
+    {
+        if (string.IsNullOrEmpty(description)) return "";
+        return description.Length > 80 ? description.Substring(0, 80) + "..." : description;
+    }
+}

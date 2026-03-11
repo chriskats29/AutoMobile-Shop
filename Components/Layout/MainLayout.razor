@@ -1,0 +1,63 @@
+@inherits LayoutComponentBase
+@using ECommerceStore.Services
+@inject CartStateService CartState
+@inject AdminStateService AdminState
+@implements IDisposable
+
+<div class="app-layout">
+    <header class="app-header">
+        <div class="header-content">
+            <a href="/" class="logo">
+                <img src="images/automotor.jpg" alt="AutoMotive Shop" class="logo-img" />
+                <span>AutoMotive Shop</span>
+            </a>
+            
+            <nav class="main-nav">
+                <a href="/" class="nav-link">Home</a>
+                <a href="/cart" class="nav-link cart-link">
+                    🛒 Cart
+                    @if (CartState.ItemCount > 0)
+                    {
+                        <span class="cart-badge">@CartState.ItemCount</span>
+                    }
+                </a>
+                @if (AdminState.IsAuthenticated)
+                {
+                    <a href="/admin/products" class="nav-link admin-link">Admin Dashboard</a>
+                }
+                else
+                {
+                    <a href="/admin/login" class="nav-link admin-link">Admin Login</a>
+                }
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        @Body
+    </main>
+
+    <footer class="app-footer">
+        <p>&copy; 2026 AutoMotive Shop. All rights reserved.</p>
+    </footer>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        CartState.OnChange += StateHasChanged;
+        AdminState.OnChange += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        CartState.OnChange -= StateHasChanged;
+        AdminState.OnChange -= StateHasChanged;
+    }
+}

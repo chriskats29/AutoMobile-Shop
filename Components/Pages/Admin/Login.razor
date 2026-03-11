@@ -1,0 +1,148 @@
+@page "/admin/login"
+@using ECommerceStore.Services
+@inject AuthService AuthService
+@inject AdminStateService AdminState
+@inject NavigationManager Navigation
+@inject IWebHostEnvironment Environment
+@implements IDisposable
+@rendermode InteractiveServer
+
+<PageTitle>Admin Login - ECommerce Store</PageTitle>
+
+<div class="login-container">
+    <div class="login-card">
+        <h2>Admin Login</h2>
+        
+        @if (Environment.IsDevelopment())
+        {
+            <div class="alert alert-info" style="margin-bottom: 1rem;">
+                <strong>Development Mode:</strong> Default credentials<br/>
+                Username: <strong>admin</strong><br/>
+                Password: <strong>admin123</strong>
+            </div>
+        }
+        
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger">@errorMessage</div>
+        }
+
+        <EditForm Model="@loginModel" OnValidSubmit="HandleLogin" FormName="loginForm">
+            <DataAnnotationsValidator />
+            
+            <div class="form-group">
+                <label for="username">Username</label>
+                <InputText id="username" @bind-Value="loginModel.Username" class="form-control" placeholder="Enter username" />
+                <ValidationMessage For="@(() => loginModel.Username)" />
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <InputText id="password" type="password" @bind-Value="loginModel.Password" class="form-control" placeholder="Enter password" />
+                <ValidationMessage For="@(() => loginModel.Password)" />
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <span>Logging in...</span>
+                }
+                else
+                {
+                    <span>Login</span>
+                }
+            </button>
+        </EditForm>
+
+        <div class="login-footer">
+            <a href="/">← Back to Store</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginModel loginModel = new();
+    private string? errorMessage;
+    private bool isLoading;
+
+    protected override void OnInitialized()
+    {
+        AdminState.OnChange += StateHasChanged;
+        
+        if (AdminState.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/admin/products");
+        }
+    }
+
+    public void Dispose()
+    {
+        AdminState.OnChange -= StateHasChanged;
+    }
+
+    private async Task HandleLogin()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(loginModel.Username) || string.IsNullOrWhiteSpace(loginModel.Password))
+            {
+                errorMessage = "Please enter both username and password.";
+                isLoading = false;
+                return;
+            }
+
+            Console.WriteLine($"[Login] Attempting login for user: {loginModel.Username}");
+            
+            var admin = await AuthService.ValidateCredentialsAsync(loginModel.Username, loginModel.Password);
+            
+            if (admin != null)
+            {
+                Console.WriteLine($"[Login] Admin user found, setting state...");
+                
+                // Set the admin state
+                AdminState.Login(admin);
+                
+                Console.WriteLine($"[Login] State set. IsAuthenticated: {AdminState.IsAuthenticated}");
+                
+                // Force UI update
+                StateHasChanged();
+                
+                // Wait a moment for state to be set
+                await Task.Delay(200);
+                
+                Console.WriteLine($"[Login] Navigating to /admin/products...");
+                
+                // Navigate to admin products page - the Dashboard will verify auth
+                Navigation.NavigateTo("/admin/products");
+            }
+            else
+            {
+                Console.WriteLine($"[Login] Login failed - admin is null");
+                errorMessage = "Invalid username or password. Please check your credentials.";
+                errorMessage += " Make sure you're using: Username: admin, Password: admin123";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Login] Exception: {ex.Message}");
+            Console.WriteLine($"[Login] Stack trace: {ex.StackTrace}");
+            errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private class LoginModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Username is required")]
+        public string Username { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Password is required")]
+        public string Password { get; set; } = string.Empty;
+    }
+}
