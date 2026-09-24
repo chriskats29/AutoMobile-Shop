@@ -1,4 +1,4 @@
-# ECommerce Store
+# ECommerce Store ⚙️
 
 A mini Blazor Server application for e-commerce store management built with C#, HTML/CSS, and PostgreSQL.
 
