@@ -60,7 +60,7 @@ The application will automatically apply migrations and seed initial data on sta
 
 > ⚠️ **Important**: Change the default admin password after first login in a production environment.
 
-##Application architecture
+### Application architecture
 <img width="1316" height="572" alt="image" src="https://github.com/user-attachments/assets/faa9196f-8ec0-45e5-81ac-7258e58c9099" />
 
 
